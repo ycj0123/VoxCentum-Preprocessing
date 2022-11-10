@@ -5,6 +5,7 @@ import torch
 import torchaudio
 from collections import Counter
 from speechbrain.pretrained import EncoderClassifier
+import whisper
 
 import denoiser
 from denoiser.pretrained import master64
@@ -16,6 +17,7 @@ class AudioLIDEnhancer:
                  lid_return_n=5,
                  lid_silero_enable=True,
                  lid_voxlingua_enable=True,
+                 lid_whisper_enable=True,
                  enable_enhancement=False):
         torchaudio.set_audio_backend("sox_io")  # switch backend
         self.device = device
@@ -26,6 +28,7 @@ class AudioLIDEnhancer:
         self.lid_return_n = lid_return_n
         self.lid_silero_enable = lid_silero_enable
         self.lid_voxlingua_enable = lid_voxlingua_enable
+        self.lid_whisper_enable = lid_whisper_enable
         self.enable_enhancement = enable_enhancement
 
         # Speech enhancement model
@@ -50,6 +53,10 @@ class AudioLIDEnhancer:
                                                                         savedir="tmp")
             self.voxlingua_language_id = self.voxlingua_language_id.to(self.device)
             self.voxlingua_language_id.eval()
+        
+        # LID model: 99 language
+        if lid_whisper_enable:
+            self.whisper_model = whisper.load_model("base")
 
     def get_max_batch(self):
         print("calculating max batch size...")
@@ -119,6 +126,22 @@ class AudioLIDEnhancer:
                         lid_result[lang_code] += values[0][i].item()
                     else:
                         lid_result[lang_code] = values[0][i].item()
+
+            if self.lid_whisper_enable:
+                audio = whisper.pad_or_trim(chunks[s_i].squeeze())
+                mel = whisper.log_mel_spectrogram(audio.to(self.device)).to(self.device)
+                
+                _, probs = self.whisper_model.detect_language(mel)
+                probs_keys = list(probs.keys())
+                probs_values = [probs[k] for k in probs_keys]
+                values, indices = torch.topk(torch.tensor(probs_values), self.lid_return_n)
+
+                for i in indices:
+                    lang_code = probs_keys[i]
+                    if lang_code in lid_result:
+                        lid_result[lang_code] += probs_values[i]
+                    else:
+                        lid_result[lang_code] = probs_values[i]
 
             # add segment probability to total probability
             if len(possible_langs) == 0:
