@@ -4,31 +4,11 @@ import os
 from sklearn.metrics import precision_score, recall_score, accuracy_score
 import nlp2
 from tqdm import tqdm
+import json
 
 from lid_enhancement import AudioLIDEnhancer
 
-lang2code = {
-    'chinese': 'zh',
-    'english': 'en',
-    'french': 'fr',
-    'german': 'de',
-    'spanish': 'es'
-}
-code2label = {
-    'zh': 1,
-    'en': 2,
-    'fr': 3,
-    'de': 4,
-    'es': 5
-}
-lang2label = {
-    'chinese': 1,
-    'english': 2,
-    'french': 3,
-    'german': 4,
-    'spanish': 5
-}
-
+code2label = json.load(open("code2label.json"))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -47,12 +27,13 @@ if __name__ == "__main__":
     wrong = []
     preds = []
     labels = []
-    lid_model = AudioLIDEnhancer(device='cuda', enable_enhancement=False, lid_voxlingua_enable=True, lid_silero_enable=True)
+    possible_langs = list(code2label.keys())
+    lid_model = AudioLIDEnhancer(device='cuda', enable_enhancement=False, lid_voxlingua_enable=True, lid_silero_enable=True, lid_whisper_enable=True)
     for file_dir in tqdm(result_jsons, desc="LID"):
         rel_dir = os.path.relpath(file_dir, config['src'])
-        label = lang2label[rel_dir.split('/')[0]]
-        label_code = lang2code[rel_dir.split('/')[0]]
-        result_code = lid_model(file_dir, possible_langs=['zh' ,'en', 'fr', 'de', 'es'])[0]
+        label = code2label[rel_dir.split('/')[0]]
+        label_code = rel_dir.split('/')[0]
+        result_code = lid_model(file_dir, possible_langs=possible_langs)[0]
         result = code2label.get(result_code)
         if result == None:
             result = 0
