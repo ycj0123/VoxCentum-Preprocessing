@@ -10,15 +10,16 @@ import whisper
 import denoiser
 from denoiser.pretrained import master64
 from utility import shuffle_gen, write, collate_fn_padd
-
+torch.backends.quantized.engine = 'qnnpack'
 
 class AudioLIDEnhancer:
-    def __init__(self, device='cpu', dry_wet=0.01, sampling_rate=16000, chunk_sec=30, max_batch=3,
+    def __init__(self, device='cuda', dry_wet=0.01, sampling_rate=16000, chunk_sec=30, max_batch=3,
                  lid_return_n=5,
                  lid_silero_enable=True,
                  lid_voxlingua_enable=True,
                  lid_whisper_enable=True,
-                 enable_enhancement=False):
+                 enable_enhancement=False,
+                 voice_activity_detection=False):
         torchaudio.set_audio_backend("sox_io")  # switch backend
         self.device = device
         self.dry_wet = dry_wet
@@ -30,6 +31,7 @@ class AudioLIDEnhancer:
         self.lid_voxlingua_enable = lid_voxlingua_enable
         self.lid_whisper_enable = lid_whisper_enable
         self.enable_enhancement = enable_enhancement
+        self.voice_activity_detection = voice_activity_detection
 
         # Speech enhancement model
         if enable_enhancement:
@@ -57,6 +59,14 @@ class AudioLIDEnhancer:
         # LID model: 99 language
         if lid_whisper_enable:
             self.whisper_model = whisper.load_model("base")
+        
+        # Load VAD model if using voice activity detection.
+        if voice_activity_detection == True:
+            USE_ONNX = False
+            self.vad_model, self.utils = torch.hub.load(repo_or_dir='snakers4/silero-vad',
+                                              model='silero_vad',
+                                              force_reload=True,
+                                              onnx=USE_ONNX)
 
     def get_max_batch(self):
         print("calculating max batch size...")
@@ -80,10 +90,42 @@ class AudioLIDEnhancer:
     # otherwise we just return the original audio
     def __call__(self, filepath='', input_values=[], result_path='', possible_langs=[], max_trial=10,
                  hit_times=5):
+        
+        no_voice_detect = 0 # initial.
+
         if len(filepath) > 0:
             # loading audio file and generating the enhanced version
-            out, sr = torchaudio.load(filepath)
-            out = out.mean(0).unsqueeze(0)
+
+            if self.voice_activity_detection == True: # if using VAD.
+                (get_speech_timestamps,
+                save_audio,
+                read_audio,
+                VADIterator,
+                collect_chunks) = self.utils
+
+                SAMPLING_RATE = 16000
+                wav = read_audio(filepath, sampling_rate=SAMPLING_RATE)
+                # get speech timestamps from full audio file
+                speech_timestamps = get_speech_timestamps(wav, self.vad_model, sampling_rate=SAMPLING_RATE)
+
+                # collect_chunks(tss: List[dict], wav: torch.Tensor):
+                chunks = []
+                for i in speech_timestamps:
+                    chunks.append(wav[i['start']: i['end']])
+                
+                if len(chunks) == 0: # empty chunk list, which is unvoiced audio.
+                    # print(f"No voice detected in {filepath}")
+                    no_voice_detect = 1
+                    out, sr = torchaudio.load(filepath)
+                    out = out.mean(0).unsqueeze(0)
+
+                else: # if chunk list is not empty.
+                    out = torch.cat(chunks).unsqueeze(0)
+                    sr = SAMPLING_RATE
+
+            else: # without using vad.
+                out, sr = torchaudio.load(filepath)
+                out = out.mean(0).unsqueeze(0)
         else:
             out = input_values
 
@@ -150,6 +192,7 @@ class AudioLIDEnhancer:
                 audio_langs += dict(filter(lambda x: x[0] in possible_langs, lid_result.items()))
         
         audio_lang = max(audio_langs, key=audio_langs.get, default='na')
+        # print(audio_lang)
 
         if self.enable_enhancement and (len(possible_langs) == 0):
             batch_data = []
@@ -174,6 +217,8 @@ class AudioLIDEnhancer:
             write(denoise, str(Path(p.parent, f"{p.stem}_enhanced{p.suffix}")), sr)
             snr = denoiser.utils.cal_snr(out, denoise)
             snr = snr.cpu().detach().numpy()[0]
-            return audio_lang, snr
+
+            return audio_lang, snr, no_voice_detect
+            
         else:
-            return audio_lang, 0
+            return audio_lang, 0, no_voice_detect
