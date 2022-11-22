@@ -6,6 +6,8 @@ import torchaudio
 from collections import Counter
 from speechbrain.pretrained import EncoderClassifier
 import whisper
+import librosa
+import numpy as np
 
 import denoiser
 from denoiser.pretrained import master64
@@ -88,6 +90,7 @@ class AudioLIDEnhancer:
     # performance language identification on input audio,
     # if the language is one of the possible language, perform language enhancement
     # otherwise we just return the original audio
+    
     def __call__(self, filepath='', input_values=[], result_path='', possible_langs=[], max_trial=10,
                  hit_times=5):
         
@@ -222,3 +225,25 @@ class AudioLIDEnhancer:
             
         else:
             return audio_lang, 0, no_voice_detect
+
+    def forward(self, X, possible_langs=None):
+        if self.lid_voxlingua_enable:
+            self.voxlingua_language_id = self.voxlingua_language_id.to(self.device)
+            _, probs, _, pred = self.voxlingua_language_id.classify_batch(X.to(self.device))
+
+            return pred
+            # for i in indices:
+            #     lang_code = probs_keys[i]
+            #     if lang_code in lid_result:
+            #         lid_result[lang_code] += probs_values[i]
+            #     else:
+            #         lid_result[lang_code] = probs_values[i]
+
+            # add segment probability to total probability
+        #     if len(possible_langs) == 0:
+        #         audio_langs += lid_result
+        #     else:
+        #         audio_langs += dict(filter(lambda x: x[0] in possible_langs, lid_result.items()))
+        
+        # audio_lang = max(audio_langs, key=audio_langs.get, default='na')
+        # print(audio_lang)
