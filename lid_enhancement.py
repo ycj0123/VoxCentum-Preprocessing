@@ -225,25 +225,51 @@ class AudioLIDEnhancer:
             
         else:
             return audio_lang, 0, no_voice_detect
+    
+    def batched_log_mel_spectrogram(self, audio):
+        mel_spec = torch.tensor(librosa.feature.melspectrogram(y=np.array(audio.cpu()), sr=self.sampling_rate, n_fft=400, hop_length=160, n_mels=80))
+
+        log_spec = torch.clamp(mel_spec, min=1e-10).log10()
+        log_spec = torch.maximum(log_spec, log_spec.max() - 8.0)
+        log_spec = (log_spec + 4.0) / 4.0
+        return log_spec
 
     def forward(self, X, possible_langs=None):
+
+        lid_result = [{} for _ in range(X.shape[0])]
+
         if self.lid_voxlingua_enable:
-            self.voxlingua_language_id = self.voxlingua_language_id.to(self.device)
-            _, probs, _, pred = self.voxlingua_language_id.classify_batch(X.to(self.device))
+            out_prob, score, index, text_lab = self.voxlingua_language_id.classify_batch(X.to(self.device))
+            values, indices = torch.topk(out_prob, self.lid_return_n, dim=1)
 
-            return pred
-            # for i in indices:
-            #     lang_code = probs_keys[i]
-            #     if lang_code in lid_result:
-            #         lid_result[lang_code] += probs_values[i]
-            #     else:
-            #         lid_result[lang_code] = probs_values[i]
-
-            # add segment probability to total probability
-        #     if len(possible_langs) == 0:
-        #         audio_langs += lid_result
-        #     else:
-        #         audio_langs += dict(filter(lambda x: x[0] in possible_langs, lid_result.items()))
+            # print("voxlingua")
+            # add the ('2 char lang_code': probability) pair to lid_result
+            for b_i in range(values.shape[0]):
+                for i, l in enumerate(self.voxlingua_language_id.hparams.label_encoder.decode_torch(indices[b_i])):
+                    lang_code = l
+                    # print(f"{lang_code}:{values[b_i][i]}")
+                    if lang_code in lid_result[b_i]:
+                        lid_result[b_i][lang_code] += values[b_i][i].item()
+                    else:
+                        lid_result[b_i][lang_code] = values[b_i][i].item()
         
-        # audio_lang = max(audio_langs, key=audio_langs.get, default='na')
-        # print(audio_lang)
+        if self.lid_whisper_enable:
+            audio = whisper.pad_or_trim(X)
+            mel = self.batched_log_mel_spectrogram(audio).to(self.device)
+            tokens, probs = self.whisper_model.detect_language(mel[:,:,:-1]) # Pop the last column
+
+            # print("whisper")
+            for b_i in range(len(probs)):
+                probs_keys = list(probs[b_i].keys())
+                probs_values = [probs[b_i][k] for k in probs_keys]
+                values, indices = torch.topk(torch.tensor(probs_values), self.lid_return_n)
+                for i in indices:
+                    lang_code = probs_keys[i]
+                    # print(f"{lang_code}:{probs_values[i]}")
+                    if lang_code in lid_result[b_i]:
+                        lid_result[b_i][lang_code] += probs_values[i]
+                    else:
+                        lid_result[b_i][lang_code] = probs_values[i]
+
+        pred = [max(batch_pred, key=batch_pred.get) for batch_pred in lid_result]
+        return pred
