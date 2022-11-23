@@ -34,7 +34,7 @@ if __name__ ==  '__main__':
     channel_name = config['channel']
 
     data_path = "/home/meta-531-216/nas-60022/cmd_download/vox100_" + language_type + "/" + channel_name 
-
+    data_path = "/Users/kuanyiiii/VOAchina"
     result_jsons = []
     start = time.time() 
 
@@ -54,7 +54,7 @@ if __name__ ==  '__main__':
     pool = mp.Pool()
     results = []
     start = time.time()
-    for result in tqdm.tqdm(pool.imap_unordered(running_vad, result_jsons), total=len(result_jsons)):
+    for result in tqdm(pool.imap_unordered(running_vad, result_jsons), total=len(result_jsons)):
         results.append(result)
     end = time.time()
     print(f"VAD Time = {end - start}")
