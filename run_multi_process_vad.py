@@ -60,7 +60,7 @@ if __name__ ==  '__main__':
     print(f"VAD Time = {end - start}")
 
     # write output.
-    for pair in result:
+    for pair in results:
         dict_key = pair[0]
         dict_value = pair[1]
         output_dict[dict_key] = dict_value
