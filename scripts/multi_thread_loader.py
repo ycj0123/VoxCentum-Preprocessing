@@ -10,7 +10,7 @@ SAMPLE_RATE = 16000
 
 class MultiThreadLoader():
 
-    def __init__(self, n_workers=3, batch_size=16, n_files=None, max_trial=10, chunk_sec=30):
+    def __init__(self, n_workers=3, batch_size=16, n_files=None, max_trial=10, chunk_sec=30, vad=False, vad_time_stamp_dict=None):
 
         # Locks
         self.lock = {
@@ -41,6 +41,10 @@ class MultiThreadLoader():
         self.max_trial = max_trial
         self.chunk_sec = chunk_sec
         self.chunk_len = chunk_sec * SAMPLE_RATE
+
+        # voice activity detection.
+        self.vad = vad
+        self.vad_time_stamp_dict = vad_time_stamp_dict
 
     def get_data_lock(self, lock):
         if self.interrupt:
@@ -76,13 +80,27 @@ class MultiThreadLoader():
             for path in files[l:r]:
                 try:
                     out, sr = torchaudio.load(path)
+
                     if sr != SAMPLE_RATE:
                         print(f"ERROR: Wrong sample rate {sr}")
                         self.interrupt = True
                         exit()
+
+                    if self.vad == True:
+                        vad_chunks = []
+                        speech_timestamps = self.vad_time_stamp_dict['path'] # key: path, value: time stamps.
+                        for i in speech_timestamps:
+                            vad_chunks.append(out[i['start']: i['end']])
+
+                        if len(vad_chunks) != 0: # if chunk list is not empty.
+                            out = torch.cat(vad_chunks).unsqueeze(0)
+                            sr = SAMPLING_RATE
+                            
+                    else: # not using vad
+                        out = out.mean(0).squeeze()
                 except:
                     continue
-                out = out.mean(0).squeeze()
+                
 
                 chunks = self.split_into_chunks(out)
                 chunks = torch.concat([chunks[s_i] for s_i in list(shuffle_gen(len(chunks)))[:self.max_trial]])
