@@ -10,7 +10,7 @@ SAMPLE_RATE = 16000
 
 class MultiThreadLoader():
 
-    def __init__(self, n_workers=3, batch_size=16, n_files=None, max_trial=10, chunk_sec=30, vad_output=False):
+    def __init__(self, n_workers=3, batch_size=16, n_files=None, max_trial=10, chunk_sec=30, vad_path=False):
 
         # Locks
         self.lock = {
@@ -42,7 +42,7 @@ class MultiThreadLoader():
         self.n_steps = ceil(self.n_files / self.batch_size)
         self.last_batched_idx = 0
         self.loading_time = None
-        self.vad_output = vad_output
+        self.vad_path = vad_path
         
         # Chunk split
         self.max_trial = max_trial
@@ -84,18 +84,32 @@ class MultiThreadLoader():
                 path = files[i]
                 try:
                     out, sr = torchaudio.load(path)
+
                     if sr != SAMPLE_RATE:
                         print(f"ERROR: Wrong sample rate {sr}")
                         self.interrupt = True
                         exit()
+
+                    if self.vad == True:
+                        vad_chunks = []
+                        speech_timestamps = self.vad_time_stamp_dict['path'] # key: path, value: time stamps.
+                        for i in speech_timestamps:
+                            vad_chunks.append(out[i['start']: i['end']])
+
+                        if len(vad_chunks) != 0: # if chunk list is not empty.
+                            out = torch.cat(vad_chunks).unsqueeze(0)
+                            sr = SAMPLE_RATE
+                            
+                    else: # not using vad
+                        out = out.mean(0).squeeze()
                 except:
                     pass
                     
                 out = out.mean(0).squeeze()
                 sec = out.shape[0] / SAMPLE_RATE
 
-                if self.vad_output is not None:
-                    timestamp = self.vad_output[path.split('/')[-1]]
+                if self.vad_path is not None:
+                    timestamp = self.vad_path[path.split('/')[-1]]
                     if len(timestamp) > 0:
                         out = torch.concat([out[obj['start']: obj['end']] for obj in timestamp])
                     else:

@@ -24,7 +24,7 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--src", type=str, default=Voxlingua107_dataset_path, help="Source directory")
     parser.add_argument("-w", "--workers", type=int, default=3, help="Number of workers")
     parser.add_argument("-v", "--vad", action='store_true', help="Voice Activity Detection")
-    parser.add_argument("--vad_output", type=str, default=None, help="Timestamps from VAD output")
+    parser.add_argument("--vad_path", type=str, default=None, help="vad timestamps file path")
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--chunk_sec", type=int, default=30)
     parser.add_argument("--max_trial", type=int, default=10)
@@ -33,16 +33,21 @@ if __name__ == "__main__":
     config = vars(args)
     source_dir = config['src']
     voice_activity_detection = config['vad']
+    vad_timestamp_path = config['vad_path']
     n_workers = config['workers']
     batch_size = config['batch_size']
     chunk_sec = config['chunk_sec']
     max_trial = config['max_trial']
 
     if voice_activity_detection == True:
+        with open(vad_timestamp_path, 'r') as f:
+            vad_time_stamp_dict = eval(f.readline())
+
         print("With using VAD")
-        vad_output = ast.literal_eval(open(config['vad_output'], "r").readline())
-        vad_output = {k.split('/')[-1]: v for k, v in vad_output.items()}
+        vad_path = ast.literal_eval(open(config['vad_path'], "r").readline())
+        vad_path = {k.split('/')[-1]: v for k, v in vad_path.items()}
     else:
+        vad_time_stamp_dict = dict()
         print("Without using VAD")
 
     result_jsons = []
@@ -62,7 +67,7 @@ if __name__ == "__main__":
         n_files = len(result_jsons),
         max_trial = max_trial,
         chunk_sec = chunk_sec,
-        vad_output = vad_output if voice_activity_detection else None,
+        vad_path = vad_path if voice_activity_detection else None,
     )
     loader.start(files=result_jsons)
     ready_data_idx = 0
