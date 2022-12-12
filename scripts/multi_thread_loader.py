@@ -10,7 +10,7 @@ SAMPLE_RATE = 16000
 
 class MultiThreadLoader():
 
-    def __init__(self, n_workers=3, batch_size=16, n_files=None, max_trial=10, chunk_sec=30):
+    def __init__(self, n_workers=3, batch_size=16, n_files=None, max_trial=10, chunk_sec=30, vad_output=False):
 
         # Locks
         self.lock = {
@@ -23,12 +23,17 @@ class MultiThreadLoader():
         self.lid_labels = []
         self.batched_inputs = []
         self.batched_labels = []
+        self.unvoiced_idx = []
+        self.file_idx = []
+        self.total_sec = 0
+        self.num_unvoiced = 0
 
         # Shared resources: worker_cnt
         self.n_workers = n_workers
 
         self.interrupt = False
         self.no_more_data = False
+        self.grouper_left = False
 
         self.threads = []
         self.code2label = json.load(open("code2label.json"))
@@ -36,6 +41,8 @@ class MultiThreadLoader():
         self.n_files = n_files
         self.n_steps = ceil(self.n_files / self.batch_size)
         self.last_batched_idx = 0
+        self.loading_time = None
+        self.vad_output = vad_output
         
         # Chunk split
         self.max_trial = max_trial
@@ -70,10 +77,11 @@ class MultiThreadLoader():
             self.interrupt = True
             exit()
         
-        
         def load_worker_func(l, r):
-            buffer = [[], []]
-            for path in files[l:r]:
+            buffer = [[], [], []] # X, y, file_idx
+            buffer_sec = 0
+            for i in range(l, r):
+                path = files[i]
                 try:
                     out, sr = torchaudio.load(path)
                     if sr != SAMPLE_RATE:
@@ -81,26 +89,46 @@ class MultiThreadLoader():
                         self.interrupt = True
                         exit()
                 except:
-                    continue
+                    pass
+                    
                 out = out.mean(0).squeeze()
+                sec = out.shape[0] / SAMPLE_RATE
 
+                if self.vad_output is not None:
+                    timestamp = self.vad_output[path.split('/')[-1]]
+                    if len(timestamp) > 0:
+                        out = torch.concat([out[obj['start']: obj['end']] for obj in timestamp])
+                    else:
+                        self.get_data_lock(self.lock["data"])
+                        self.num_unvoiced += 1
+                        self.unvoiced_idx.append(i)
+                        self.lock["data"].release()
+                        continue
+                
                 chunks = self.split_into_chunks(out)
                 chunks = torch.concat([chunks[s_i] for s_i in list(shuffle_gen(len(chunks)))[:self.max_trial]])
 
                 buffer[0].append(chunks)
                 buffer[1].append(self.code2label[path.split('/')[-3].split('_')[-1]])
+                buffer[2].append(i)
+                buffer_sec += sec
 
                 if len(buffer[0]) >= self.batch_size:
                     self.get_data_lock(self.lock["data"])
                     self.audio_tensors.extend(buffer[0])
                     self.lid_labels.extend(buffer[1])
+                    self.file_idx.extend(buffer[2])
+                    self.total_sec += buffer_sec
                     self.lock["data"].release()
-                    buffer = [[], []]
+                    buffer = [[], [], []]
+                    buffer_sec = 0
             
             if len(buffer[0]) > 0:
                 self.get_data_lock(self.lock["data"])
                 self.audio_tensors.extend(buffer[0])
                 self.lid_labels.extend(buffer[1])
+                self.file_idx.extend(buffer[2])
+                self.total_sec += buffer_sec
                 self.lock["data"].release()
 
             self.lock["worker_cnt"].acquire()
@@ -110,7 +138,7 @@ class MultiThreadLoader():
         
         def group_worker_func():
             t0 = 0
-            progress = tqdm(total=self.n_steps, desc="LID", position=0)
+            progress = tqdm(total=self.n_steps, desc="LOAD", position=0)
 
             while self.num_worker_left() > 0:
                 # Check whether data is ready for grouping
@@ -134,7 +162,15 @@ class MultiThreadLoader():
                 sleep(1)
             
             # All loading workers are done
+            self.get_data_lock(self.lock["data"])
             num_audio = len(self.audio_tensors)
+            self.lock["data"].release()
+            while num_audio != self.n_files - self.num_unvoiced:
+                print("crucial wait")
+                sleep(1)
+                self.get_data_lock(self.lock["data"])
+                num_audio = len(self.audio_tensors)
+                self.lock["data"].release()
             while num_audio > t0:
                 if num_audio-t0 >= self.batch_size:
                     batched_input = torch.nn.utils.rnn.pad_sequence(self.audio_tensors[t0:t0+self.batch_size], batch_first=True)
@@ -150,8 +186,12 @@ class MultiThreadLoader():
                     t0 = num_audio
                 progress.update(1)
             
+            self.loading_time = progress.format_dict['elapsed']
+            
             for trd in self.threads:
                 trd.join()
+            
+            self.grouper_left = True
             # print("Grouper left.")
         
         signal.signal(signal.SIGINT, int_handler)
@@ -195,7 +235,7 @@ class MultiThreadLoader():
             self.last_batched_idx = num_batched_data
             self.lock["data"].release()
         
-        elif self.num_worker_left() == 0 and last_batched_idx == num_batched_data:
+        elif self.num_worker_left() == 0 and self.grouper_left and last_batched_idx == num_batched_data:
             self.no_more_data = True
         
         return X, y, l, r
