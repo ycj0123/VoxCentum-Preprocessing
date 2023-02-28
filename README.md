@@ -1,4 +1,31 @@
-# audio-preprocessing-pipeline
+# VoxCentum
+
+## Data Structure
+```bash=
+VoxCentum
+├── data
+│   ├── code2label.json
+│   ├── iso_639-1.json
+│   └── ...
+├── LID
+│   ├── modules
+│   |   ├── log_results.py
+│   |   └── ...
+│   ├── run_lid.py
+│   ├── run_lid.sh
+│   └── ...
+├── scripts
+│   ├── cal_family_json.py
+│   ├── cal_num.py
+│   └── ...
+└── VAD
+    ├── modules
+    |   ├── utils.py
+    |   └── ...
+    ├── run_vad.py
+    └── ...
+
+```
 
 ## Preparation
 
