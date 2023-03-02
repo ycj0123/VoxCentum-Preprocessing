@@ -64,6 +64,16 @@ python run_lid.py \
     --vad_path path/to/vad_time_stamp_LID_CHANNEL.txt  # path to vad time stamp dictionary
 ```
 
+### Running Voice Activity Detection (VAD) with Multi-Process
+
+```bash
+python run_vad.py \
+    -v path/to/vad_result \         # path to the folder of VAD result
+    -a path/to/audio_data_root \    # path to the root of the audio data
+    -d path/to/data_list \          # path to the list of audio data we used
+```
+
+
 ### Convert audio format to ogg and sampling to 16k
 
 `python convert_format_sampling.py -s /audio_folder/ -w 30`
