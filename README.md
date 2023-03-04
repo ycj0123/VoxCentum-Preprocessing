@@ -39,29 +39,55 @@ apt-get -qq install -y ffmpeg
 
 ### Running Language Identification (LID) with Multi-Thread
 
-Run `multi_run.sh` will predict LID for all 70 channels of 14 languages whose output under `./output/vox100_LID/` does not exist.
+Jush execute `LID/run.sh` with correct settings.
 
-`sh multi_run.sh`
+1. Predict LID for a single channel folder.
 
-Run `run.sh` with path to channel_folder and vad_time_stamp_LID_CHANNEL.txt will predict LID for the given channel. e.g.
-
+Set 
 ```bash
-sh run.sh \
-    ../cmd_download/vox100_ar/aljazeera \
-    ../stage1_vad_timestamps/vad_time_stamp_ar_aljazeera.txt
+# in run.sh
+source_folder=path/to/channel_folder
+multi_lang=false
+ground_truth=lid
 ```
 
-Run `run_lid.py` will predict LID for a channel.
+The structure of the dataset should be
 
+```bash=
+channel_folder
+├── audio-1.ogg
+├── audio-2.ogg
+└── ...
+```
+
+2. Predict LID for a multi-lingual dataset:
+
+Set 
 ```bash
-python run_lid.py \
-    -s path/to/vox100_lid/channel \  # path to channel folder containing *.ogg
-    -w 4 \                          # number of workers
-    --batch_size 8 \                # batch size
-    --max_trial 3 \                 # number of random samples
-    --chunk_sec 10 \                # size of a random sample
-    -v \                            # Use vad
-    --vad_path path/to/vad_time_stamp_LID_CHANNEL.txt  # path to vad time stamp dictionary
+# in run.sh
+source_folder=path/to/dataset
+multi_lang=true
+```
+
+The structure of the dataset should be
+
+```bash=
+dataset
+├── en
+│   ├── channel_1
+│   │   ├── audio-1.ogg
+│   │   ├── audio-2.ogg
+│   │   └── ...
+│   └── channel_2
+│       ├── audio-1.ogg
+│       ├── audio-2.ogg
+│       └── ...
+├── af
+│   ├── channel_1
+│   │   ├── audio-1.ogg
+│   │   ├── audio-2.ogg
+│   └── ...
+...
 ```
 
 ### Running Voice Activity Detection (VAD) with Multi-Process
