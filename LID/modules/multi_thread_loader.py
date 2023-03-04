@@ -3,14 +3,15 @@ from time import sleep
 from tqdm import tqdm
 import numpy as np
 from math import ceil
-from utility import shuffle_gen
+from scripts.utility import shuffle_gen
+from modules.code2label import code2label
 
 LOCK_TIMEOUT = 3
 SAMPLE_RATE = 16000
 
 class MultiThreadLoader():
 
-    def __init__(self, n_workers=3, batch_size=16, n_files=None, max_trial=10, chunk_sec=30, vad_path=False):
+    def __init__(self, n_workers=3, batch_size=16, n_files=None, max_trial=10, chunk_sec=30, vad_path=False, ground_truth='en', use_vad=False):
 
         # Locks
         self.lock = {
@@ -27,6 +28,7 @@ class MultiThreadLoader():
         self.file_idx = []
         self.total_sec = 0
         self.num_unvoiced = 0
+        self.ground_truth = ground_truth
 
         # Shared resources: worker_cnt
         self.n_workers = n_workers
@@ -36,7 +38,7 @@ class MultiThreadLoader():
         self.grouper_left = False
 
         self.threads = []
-        self.code2label = json.load(open("code2label.json"))
+        self.code2label = code2label
         self.batch_size = batch_size
         self.n_files = n_files
         self.n_steps = ceil(self.n_files / self.batch_size)
@@ -48,6 +50,21 @@ class MultiThreadLoader():
         self.max_trial = max_trial
         self.chunk_sec = chunk_sec
         self.chunk_len = chunk_sec * SAMPLE_RATE
+        
+        # Use VAD
+        self.use_vad = use_vad
+        if self.use_vad:
+            USE_ONNX = False
+            self.vad_model, self.utils = torch.hub.load(repo_or_dir='snakers4/silero-vad',
+                                              model='silero_vad',
+                                              force_reload=True,
+                                              trust_repo=True,
+                                              onnx=USE_ONNX)
+            (self.get_speech_timestamps,
+            save_audio,
+            read_audio,
+            VADIterator,
+            collect_chunks) = self.utils
 
     def get_data_lock(self, lock):
         if self.interrupt:
@@ -84,6 +101,12 @@ class MultiThreadLoader():
                 path = files[i]
                 try:
                     out, sr = torchaudio.load(path)
+                    sec = out.shape[0] / SAMPLE_RATE if len(out.shape) == 1 else out.shape[1] / SAMPLE_RATE
+                except:
+                    print(path)
+                    self.num_unvoiced += 1
+                    continue
+                try:
 
                     if sr != SAMPLE_RATE:
                         print(f"ERROR: Wrong sample rate {sr}")
@@ -106,7 +129,6 @@ class MultiThreadLoader():
                     pass
                     
                 out = out.mean(0).squeeze()
-                sec = out.shape[0] / SAMPLE_RATE
 
                 if self.vad_path is not None:
                     timestamp = self.vad_path[path.split('/')[-1]]
@@ -119,11 +141,30 @@ class MultiThreadLoader():
                         self.lock["data"].release()
                         continue
                 
+                
                 chunks = self.split_into_chunks(out)
-                chunks = torch.concat([chunks[s_i] for s_i in list(shuffle_gen(len(chunks)))[:self.max_trial]])
+                audio = torch.concat([chunks[s_i] for s_i in list(shuffle_gen(len(chunks)))[:self.max_trial]])
+                if self.use_vad:
+                    self.get_data_lock(self.lock["data"])
+                    speech_timestamps = self.get_speech_timestamps(audio, self.vad_model, sampling_rate=SAMPLE_RATE)
+                    chunks = []
+                    for j in speech_timestamps:
+                        chunks.append(audio[j['start']: j['end']])
+                    
+                    if len(chunks) == 0: # empty chunk list, which is unvoiced audio.
+                        print("unvoiced")
+                        self.num_unvoiced += 1
+                        self.unvoiced_idx.append(i)
+                        self.lock["data"].release()
+                        continue
 
-                buffer[0].append(chunks)
-                buffer[1].append(self.code2label[path.split('/')[-3].split('_')[-1]])
+                    else: # if chunk list is not empty.
+                        audio = torch.cat(chunks).unsqueeze(0)
+                    self.lock["data"].release()
+
+                buffer[0].append(audio)
+                # buffer[1].append(self.code2label[path.split('/')[-3].split('_')[-1]])
+                buffer[1].append(self.code2label[self.ground_truth])
                 buffer[2].append(i)
                 buffer_sec += sec
 
@@ -148,7 +189,6 @@ class MultiThreadLoader():
             self.lock["worker_cnt"].acquire()
             self.n_workers -= 1
             self.lock["worker_cnt"].release()
-            # print("Worker Left.")
         
         def group_worker_func():
             t0 = 0
@@ -180,7 +220,7 @@ class MultiThreadLoader():
             num_audio = len(self.audio_tensors)
             self.lock["data"].release()
             while num_audio != self.n_files - self.num_unvoiced:
-                print("crucial wait")
+                print("crucial wait", num_audio, self.n_files, self.num_unvoiced)
                 sleep(1)
                 self.get_data_lock(self.lock["data"])
                 num_audio = len(self.audio_tensors)
@@ -210,6 +250,7 @@ class MultiThreadLoader():
         
         signal.signal(signal.SIGINT, int_handler)
 
+        self.n_workers = min(self.n_workers, len(files))
         for i in range(self.n_workers):
             trd = threading.Thread(
                 target = load_worker_func, 
@@ -255,12 +296,13 @@ class MultiThreadLoader():
         return X, y, l, r
     
     def free_data(self, l, r):
+        # print(len(self.audio_tensors), len(self.lid_labels))
         self.get_data_lock(self.lock["data"])
         for i in range(l, r+1):
             self.batched_inputs[i] = None
             self.batched_labels[i] = None
             for j in range(l*self.batch_size, (r+1)*self.batch_size):
-                if j < len(self.audio_tensors):
+                if j < len(self.audio_tensors) and j < len(self.lid_labels):
                     self.audio_tensors[j] = None
                     self.lid_labels[j] = None
         self.lock["data"].release()

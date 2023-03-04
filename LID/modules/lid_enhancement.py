@@ -9,10 +9,14 @@ import whisper
 import librosa
 import numpy as np
 
-import denoiser
-from denoiser.pretrained import master64
-from utility import shuffle_gen, write, collate_fn_padd
+import scripts.denoiser as denoiser
+from scripts.denoiser.pretrained import master64
+from scripts.utility import shuffle_gen, write, collate_fn_padd
 torch.backends.quantized.engine = 'qnnpack'
+import json
+from scripts.cal_num import WHISPER_LANGS, VOX_LANGS, SILERO_LANGS
+from tqdm import tqdm
+from modules.code2label import code2label
 
 class AudioLIDEnhancer:
     def __init__(self, device='cuda', dry_wet=0.01, sampling_rate=16000, chunk_sec=30, max_batch=3,
@@ -34,6 +38,12 @@ class AudioLIDEnhancer:
         self.lid_whisper_enable = lid_whisper_enable
         self.enable_enhancement = enable_enhancement
         self.voice_activity_detection = voice_activity_detection
+        self.code2label = code2label
+        self.label2code = {v:k for k, v in self.code2label.items()}
+        self.whisper_langs = set([self.code2label[lang] for lang in WHISPER_LANGS.keys()])
+        self.vox_langs = set([self.code2label[lang] for lang in VOX_LANGS.keys()])
+        self.silero_langs = set([self.code2label[lang] for lang in SILERO_LANGS.keys()])
+        self.mel_transform = torchaudio.transforms.MelSpectrogram(16000, n_fft=400, hop_length=160, n_mels=80, norm='slaney', mel_scale="slaney")
 
         # Speech enhancement model
         if enable_enhancement:
@@ -227,8 +237,9 @@ class AudioLIDEnhancer:
             return audio_lang, 0, no_voice_detect
     
     def batched_log_mel_spectrogram(self, audio):
-        mel_spec = torch.tensor(librosa.feature.melspectrogram(y=np.array(audio.cpu()), sr=self.sampling_rate, n_fft=400, hop_length=160, n_mels=80))
-
+        # mel_spec = torch.tensor(librosa.feature.melspectrogram(y=np.array(audio.cpu()), sr=self.sampling_rate, n_fft=400, hop_length=160, n_mels=80))
+        mel_spec = self.mel_transform(audio)
+        
         log_spec = torch.clamp(mel_spec, min=1e-10).log10()
         log_spec = torch.maximum(log_spec, log_spec.max() - 8.0)
         log_spec = (log_spec + 4.0) / 4.0
@@ -272,4 +283,72 @@ class AudioLIDEnhancer:
                         lid_result[b_i][lang_code] = probs_values[i]
 
         pred = [max(batch_pred, key=batch_pred.get) for batch_pred in lid_result]
+        return pred
+
+    def update_lid_result(self, audio_idx, lid_result, pred_keys, pred_probs):
+        pred_probs = [pred_probs[i] / sum(pred_probs) for i in range(self.lid_return_n)]
+        for pred_i in range(self.lid_return_n):
+            lang_code = pred_keys[pred_i]
+            prob = pred_probs[pred_i]
+            if lang_code in lid_result[audio_idx]:
+                lid_result[audio_idx][lang_code] += prob
+            else:
+                lid_result[audio_idx][lang_code] = prob
+
+    
+    def seq_forward(self, X, Y):
+        lid_result = [{} for _ in range(len(X))]
+
+        for b_i in range(len(X)):
+            audio_tensor = X[b_i]
+            if audio_tensor.size()[0] == 2:
+                audio_tensor = audio_tensor.mean(0)
+            if len(audio_tensor.size()) == 1:
+                audio_tensor = audio_tensor.reshape(1, -1)
+            if len(audio_tensor.size()) != 2 or audio_tensor.size()[0] != 1:
+                print(f"wrong input size: {audio_tensor.size()}")
+                exit()
+
+            if self.lid_silero_enable and Y[b_i] in self.silero_langs:
+                pred_lang, _ = self.silero_get_language_and_group(audio_tensor.squeeze(), self.silero_model, self.silero_lang_dict, self.silero_lang_group_dict, top_n=self.lid_return_n)
+                pred_keys, pred_probs = [pred_lang[i][0].split(',')[0] for i in range(self.lid_return_n)], [pred_lang[i][1] for i in range(self.lid_return_n)]
+                # print("silero:", pred_keys, [pred_probs[i] / sum(pred_probs) for i in range(self.lid_return_n)])
+                self.update_lid_result(b_i, lid_result, pred_keys, pred_probs)
+
+            if self.lid_voxlingua_enable and Y[b_i] in self.vox_langs:
+                out_prob, score, index, text_lab = self.voxlingua_language_id.classify_batch(audio_tensor.to(self.device))
+                values, indices = torch.topk(out_prob, self.lid_return_n, dim=1)
+
+                pred_keys = []
+                pred_probs = []
+                for i, l in enumerate(self.voxlingua_language_id.hparams.label_encoder.decode_torch(indices[0])):
+                    pred_keys.append(l)
+                    pred_probs.append(values[0][i].item())
+                
+                # print("voxlingua:", pred_keys, [pred_probs[i] / sum(pred_probs) for i in range(self.lid_return_n)])
+                self.update_lid_result(b_i, lid_result, pred_keys, pred_probs)
+            
+            if self.lid_whisper_enable and Y[b_i] in self.whisper_langs:
+                audio = whisper.pad_or_trim(audio_tensor.reshape(1, -1))
+                mel = self.batched_log_mel_spectrogram(audio).to(self.device)
+                tokens, probs = self.whisper_model.detect_language(mel[:,:,:-1]) # Pop the last column
+
+                pred_keys = list(probs[0].keys())
+                pred_probs = [probs[0][k] for k in pred_keys]
+                values, indices = torch.topk(torch.tensor(pred_probs), self.lid_return_n)
+
+                pred_keys = [pred_keys[i] for i in indices]
+                pred_probs = [pred_probs[i] for i in indices]
+                
+                # print("whisper:", pred_keys, [pred_probs[i] / sum(pred_probs) for i in range(self.lid_return_n)])
+                self.update_lid_result(b_i, lid_result, pred_keys, pred_probs)
+            
+            if (Y[b_i] not in self.whisper_langs) and (Y[b_i] not in self.vox_langs) and (Y[b_i] not in self.silero_langs):
+                print("[ERR] language not found.")
+                print(Y[b_i])
+                exit()
+
+        pred = [max(batch_pred, key=batch_pred.get) for batch_pred in lid_result]
+        # pred = [self.code2label[lid] for lid in pred]
+        # print(pred)
         return pred

@@ -4,3 +4,5 @@ nlp2
 tqdm
 ffmpeg-python
 onnxruntime
+openai-whisper
+librosa
