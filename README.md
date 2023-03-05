@@ -122,6 +122,14 @@ vox100 (audio data root)
 
 or providing the list of the audio path you want to process.
 
+```bash
+python run_vad.py \
+    -v path/to/vad_result \         # path to the folder of the output of VAD.
+    -a path/to/audio_data_root \    # path to the root of the audio data.
+    -f audio format                 # default: .wav
+    -d path/to/[lang_code]-filtered-list.txt
+```
+
 The list should be named as "[lang_code]-filtered-list.txt"
 The structure of the list should be:
 
