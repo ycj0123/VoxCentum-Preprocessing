@@ -94,10 +94,47 @@ dataset
 
 ```bash
 python run_vad.py \
-    -v path/to/vad_result \         # path to the folder of VAD result
-    -a path/to/audio_data_root \    # path to the root of the audio data
-    -d path/to/data_list \          # path to the list of audio data we used
+    -v path/to/vad_result \         # path to the folder of the output of VAD.
+    -a path/to/audio_data_root \    # path to the root of the audio data.
+    -f audio format                 # default: .wav
 ```
+
+The structure of the input audio should be:
+
+```bash=
+vox100 (audio data root)
+├── ar
+│   ├── channel_1
+│   │   ├── audio-1.wav
+│   │   ├── audio-2.wav
+│   │   └── ...
+│   └── channel_2
+│       ├── audio-1.wav
+│       ├── audio-2.wav
+│       └── ...
+├── bn
+│   ├── channel_1
+│   │   ├── audio-1.wav
+│   │   ├── audio-2.wav
+│   └── ...
+...
+```
+
+or providing the list of the audio path you want to process.
+
+The list should be named as "[lang_code]-filtered-list.txt"
+The structure of the list should be:
+
+```bash=
+[lang-code]-filtered-list.txt
+├── path/to/audio-1.wav
+├── path/to/audio-2.wav
+├── path/to/audio-2.wav
+├── path/to/audio-2.wav
+│ 
+...
+```
+
 
 
 ### Convert audio format to ogg and sampling to 16k
