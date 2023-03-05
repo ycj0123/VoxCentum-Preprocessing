@@ -143,6 +143,27 @@ The structure of the list should be:
 ...
 ```
 
+The output of the VAD result would be named as "vad_time_stamp_[lang_code].json".
+The structure of the .json file should be:
+
+```bash=
+vad_time_stamp_[lang_code].json
+├── path/to/audio-1.wav
+│   ├── timestamp1
+│   │   ├── {"start": start1, "end": end1}
+│   │   ├── {"start": start2, "end": end2}
+│   │   └── ...
+│   └── timestamp2
+│       ├── {"start": start1, "end": end1}
+│       ├── {"start": start2, "end": end2}
+│       └── ...
+├── path/to/audio-1.wav
+│   ├── timestamp1
+│   │   ├── {"start": start1, "end": end1}
+│   │   ├── {"start": start2, "end": end2}
+│   └── ...
+...
+```
 
 
 ### Convert audio format to ogg and sampling to 16k
