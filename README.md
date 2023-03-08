@@ -165,6 +165,38 @@ vad_time_stamp_[lang_code].json
 ...
 ```
 
+### Preprocessd Audio Data
+
+```bash=
+vox100
+├── en
+│   ├── 30sec
+│   │   ├── audio-1.wav
+│   │   ├── audio-2.wav
+│   │   └── ...
+│   ├── 10sec
+│   │   ├── audio-1.wav
+│   │   ├── audio-2.wav
+│   │   └── ...
+│   └── 3sec
+│       ├── audio-1.wav
+│       ├── audio-2.wav
+│       └── ...
+├── zh
+│   ├── 30sec
+│   │   ├── audio-1.wav
+│   │   ├── audio-2.wav
+│   │   └── ...
+│   ├── 10sec
+│   │   ├── audio-1.wav
+│   │   ├── audio-2.wav
+│   │   └── ...
+│   └── 3sec
+│       ├── audio-1.wav
+│       ├── audio-2.wav
+│       └── ...
+...
+```
 
 ### Convert audio format to ogg and sampling to 16k
 
