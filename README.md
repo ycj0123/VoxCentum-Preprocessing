@@ -198,6 +198,37 @@ vox100
 ...
 ```
 
+```bash=
+vox100
+├── am
+│   ├── 30sec
+│   │   ├── audio-1.wav
+│   │   ├── audio-2.wav
+│   │   └── ...
+│   ├── 10sec
+│   │   ├── audio-1.wav
+│   │   ├── audio-2.wav
+│   │   └── ...
+│   └── 3sec
+│       ├── audio-1.wav
+│       ├── audio-2.wav
+│       └── ...
+├── as
+│   ├── 30sec
+│   │   ├── audio-1.wav
+│   │   ├── audio-2.wav
+│   │   └── ...
+│   ├── 10sec
+│   │   ├── audio-1.wav
+│   │   ├── audio-2.wav
+│   │   └── ...
+│   └── 3sec
+│       ├── audio-1.wav
+│       ├── audio-2.wav
+│       └── ...
+...
+```
+
 ### Convert audio format to ogg and sampling to 16k
 
 `python convert_format_sampling.py -s /audio_folder/ -w 30`
