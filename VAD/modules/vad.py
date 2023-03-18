@@ -1,5 +1,5 @@
 import torch
-from hubconf import silero_vad
+from modules.hubconf import silero_vad
 import time
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 import multiprocessing as mp

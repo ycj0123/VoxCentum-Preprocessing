@@ -143,7 +143,8 @@ if __name__ ==  '__main__':
                     output_dict[dict_key] = dict_value
         
                 # output path: output_dir/vad_time_stamp_{lang_code}.json
-                output_file_name = vad_output_dir + "/" + "vad_time_stamp_" + lang_code + "_" + channel_name + ".json"
+                os.makedirs(vad_output_dir, exist_ok=True)
+                output_file_name = vad_output_dir + "/" + "vad_time_stamp_" + lang_code + "_" + channel + ".json"
                 with open(output_file_name, "w") as fp:
                     json.dump(output_dict, fp, indent=4)
                 

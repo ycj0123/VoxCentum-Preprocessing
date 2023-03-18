@@ -1,7 +1,7 @@
 dependencies = ['torch', 'torchaudio']
 import torch
 import json
-from utils_vad import (init_jit_model,
+from modules.utils_vad import (init_jit_model,
                        get_speech_timestamps,
                        get_number_ts,
                        get_language,
