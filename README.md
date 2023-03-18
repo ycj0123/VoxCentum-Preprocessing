@@ -41,33 +41,17 @@ apt-get -qq install -y ffmpeg
 
 Jush execute `LID/run.sh` with correct settings.
 
-1. Predict LID for a single channel folder.
+1. Predict LID for a multi-lingual dataset:
 
-Set 
-```bash
-# in run.sh
-source_folder=path/to/channel_folder
-multi_lang=false
-ground_truth=lid
+```python
+python run_lid.py \
+    -s path/to/dataset \         # path to the folder of the output of VAD.
+    -v path/to/vad/output \      # path to the root of the audio data.
+    --lid_voxlingua_enable \
+    --lid_whisper_enable \
+    --lid_silero_enable
 ```
 
-The structure of the dataset should be
-
-```bash=
-channel_folder
-├── audio-1.ogg
-├── audio-2.ogg
-└── ...
-```
-
-2. Predict LID for a multi-lingual dataset:
-
-Set 
-```bash
-# in run.sh
-source_folder=path/to/dataset
-multi_lang=true
-```
 
 The structure of the dataset should be
 
