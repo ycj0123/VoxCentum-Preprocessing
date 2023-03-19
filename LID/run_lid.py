@@ -160,7 +160,7 @@ if __name__ == "__main__":
         audio_dataset = AudioSamplesDataset(
             audio_files = audio_filenames,
             root_dir = source_dir,
-            vad_path = os.path.join(args.vad_path, "vad_time_stamp_" + ground_truth + "_" + os.path.basename(source_dir) + ".json"),
+            vad_path = os.path.join(args.vad_path, "vad_time_stamp_" + ground_truth + "_" + os.path.basename(source_dir) + ".json") if args.vad_path else None,
             chunk_sec = args.chunk_sec,
             max_trial = args.max_trial
         )
