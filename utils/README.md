@@ -3,7 +3,7 @@
 ## Pipeline Overview
 (0). Make use of the our LID pipeline to test the LID accuracy on different channels by sampling some audio data of each channel. If LID accuracy is too low, there might be some problem in that channel.  
 (1). Select 200~300 hours of audio data in each language（by metadata）  
-    * Record the audio data we have used.  
+    ** Record the audio data we have used.  
     * There are 5 channels in each language.  
     * Select 300 hours from each language.  
     * Format：wav file、sampling rate = 16k, audio bit rate = 16, channel_num = 2  
