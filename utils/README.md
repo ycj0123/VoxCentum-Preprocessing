@@ -96,3 +96,24 @@
 (1). Stored in:  
 /home/meta-531-216/mount-4/VoxCentum_stage{index}1channel  
 (index = 1, 2, 3)  
+
+## Code
+### Utils
+
+(1) utils/stat/cal_vad_time.py  
+Calculating and recording the raw duration and post-VAD duration for various channels in different languages.  
+
+(2) utils/change_1channel.py  
+Converting audio files to mono channel and a sample rate of 16k.  
+
+(3) utils/check_lang_channel.py  
+Calculating the original duration for each channel.  
+
+(4) utils/data_filter_manual.py  
+Making filtered data list for each language, each language has about 300 hours.  
+
+(5) utils/mp_construct_metadata.py  
+Creating data statistics for each channel in different languages across all videos.  
+
+(6) utils/split_audio.py  
+Segmenting each audio based on the filtered data list after VAD into 10-second segments.  
