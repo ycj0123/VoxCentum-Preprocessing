@@ -14,10 +14,14 @@
 * After doing VAD, the hours of audio data is 196-hr ~ 250-hr.
 
 (3). Split the audio data preprocessed by VAD into segments of fixed length. In our setting, the length is 10 sec.  
+
 (4). Extract feature offline from our preprocessed audio data, e.g. Mel-spectrogram.  
+
 (5). Train a simple x-vector based model.  
+
 (6). On the language-level, filtering 110-hr audio data by the loss computed by our x-vector model.  
-(7). Random split the filtered data into Train/Evaluation/Test set, e.g. 100-hr/5-hr/5-hr.  
+
+(7). Random split the filtered data into train/evaluation/test set, e.g. 100-hr/5-hr/5-hr.  
 
 ## Details
 
