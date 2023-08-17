@@ -74,6 +74,23 @@ dataset
 ...
 ```
 
+### Filtering by Language Identification (LID).
+
+1. Predict LID for a multi-lingual dataset:
+
+```python
+python run_lid.py \
+    -s path/to/dataset \         # path to the folder of the output of VAD.
+    -v path/to/vad/output \      # path to the root of the audio data.
+    --lid_voxlingua_enable \
+    --lid_whisper_enable \
+    --lid_silero_enable
+```
+  
+2. Obtain the probabilities of each video belonging to different languages. If the top three probabilities correspond to languages other than the channel's predefined languages, they will be excluded.
+
+3. For example, if a audio file from the "ami" language is processed using LID and the top three predicted languages are "zh" (Chinese), "hak" (Hakka), and "yue" (Cantonese), then this audio file will be filtered out.   
+
 ### Running Voice Activity Detection (VAD) with Multi-Process
 
 ```bash
