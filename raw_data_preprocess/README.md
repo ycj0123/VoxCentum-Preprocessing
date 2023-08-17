@@ -117,3 +117,6 @@ Creating data statistics for each channel in different languages across all vide
 
 (6) split_audio.py  
 Segmenting each audio based on the filtered data list after VAD into 10-second segments.  
+
+## Metadata
+In metadata/metadata.json, this JSON file records which YouTube videos have been used for different languages, providing users with the option to download them independently.  
