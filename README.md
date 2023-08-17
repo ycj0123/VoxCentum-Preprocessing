@@ -213,6 +213,9 @@ vox100
 ...
 ```
 
+### Utils
+#### stat/cal_vad_time.py
+
 ### Convert audio format to ogg and sampling to 16k
 
 `python convert_format_sampling.py -s /audio_folder/ -w 30`
