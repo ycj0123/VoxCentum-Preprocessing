@@ -1,17 +1,18 @@
 # VoxCentum_Preprocess
 
 ## Pipeline Overview
-#### (0). Make use of the our LID pipeline to test the LID accuracy on different channels by sampling some audio data of each channel. If LID accuracy is too low, there might be some problem in that channel.  
+(0). Make use of the our LID pipeline to test the LID accuracy on different channels by sampling some audio data of each channel. If LID accuracy is too low, there might be some problem in that channel.  
 
 (1). Select 200~300 hours of audio data in each language（by metadata）  
 * Record the audio data we have used.  
 * There are 5 channels in each language.  
 * Select 300 hours from each language.  
 * Format：wav file、sampling rate = 16k, audio bit rate = 16, channel_num = 2.
-* 
+
 (2). Do VAD (Voice Activity Detection)  
-    * The ratio of Hours of post-VAD audio data to Hours of pre-VAD audio data is 65%~80%.  
-    * After doing VAD, the hours of audio data is 196-hr ~ 250-hr.  
+* The ratio of Hours of post-VAD audio data to Hours of pre-VAD audio data is 65%~80%.  
+* After doing VAD, the hours of audio data is 196-hr ~ 250-hr.
+
 (3). Split the audio data preprocessed by VAD into segments of fixed length. In our setting, the length is 10 sec.  
 (4). Extract feature offline from our preprocessed audio data, e.g. Mel-spectrogram.  
 (5). Train a simple x-vector based model.  
